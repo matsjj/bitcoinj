@@ -16,16 +16,20 @@
 
 package org.bitcoinj.crypto;
 
-import com.google.common.collect.*;
-import org.bitcoinj.core.*;
-import org.spongycastle.math.ec.*;
+import com.google.common.collect.ImmutableList;
+import org.bitcoin.NativeSecp256k1;
+import org.bitcoin.Secp256k1Context;
+import org.bitcoinj.core.ECKey;
+import org.bitcoinj.core.Utils;
+import org.spongycastle.math.ec.ECPoint;
 
-import java.math.*;
-import java.nio.*;
-import java.security.*;
-import java.util.*;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.Arrays;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 
 /**
  * Implementation of the <a href="https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki">BIP 32</a>
@@ -193,7 +197,18 @@ public final class HDKeyDerivation {
         ECPoint Ki;
         switch (mode) {
             case NORMAL:
-                Ki = ECKey.publicPointFromPrivate(ilInt).add(parent.getPubKeyPoint());
+                if(Secp256k1Context.isEnabled()) {
+                    try {
+                        byte[] privateKey = il;
+                        byte[] publicKey = NativeSecp256k1.computePubkey(privateKey);
+                        byte[] addedPublicKey = NativeSecp256k1.pubKeyTweakAdd(publicKey, parent.getPubKey());
+                        Ki = ECKey.CURVE.getCurve().decodePoint(addedPublicKey);
+                    } catch(Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                } else {
+                    Ki = ECKey.publicPointFromPrivate(ilInt).add(parent.getPubKeyPoint());
+                }
                 break;
             case WITH_INVERSION:
                 // This trick comes from Gregory Maxwell. Check the homomorphic properties of our curve hold. The
